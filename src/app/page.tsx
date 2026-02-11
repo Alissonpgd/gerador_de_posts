@@ -60,25 +60,34 @@ export default function Home() {
 
   // --- LÓGICA DE SALVAR NO BANCO ---
   const salvarVaga = async () => {
-    // 1. Criamos um objeto com os dados (apenas textos por enquanto)
-    const dadosVaga = {
-      titulo,
-      empresa,
-      subtitulo,
-      email,
-      requisitos: requisitos.split("\n").filter(r => r !== ""),
-      cor,
-      criadoEm: serverTimestamp(), // Registra a data/hora exata que foi salvo
-    };
+    // Verificação simples para não salvar sem título
+    if (!titulo || !empresa) {
+      alert("Por favor, preencha o título e a empresa.");
+      return;
+    }
 
     try {
-      // 2. Enviamos para a coleção "vagas" no Firestore
+      // 1. Criamos o objeto com TUDO, incluindo as imagens em Base64
+      const dadosVaga = {
+        titulo,
+        empresa,
+        subtitulo,
+        email,
+        requisitos: requisitos.split("\n").filter(r => r !== ""),
+        cor,
+        logoUrl: logo, // Aqui vai o texto da imagem (Base64)
+        imagemUrl: foto, // Aqui vai o texto da imagem de fundo (Base64)
+        criadoEm: new Date().toISOString(), // Usando data comum para simplificar
+      };
+
+      // 2. Salvamos direto na coleção "vagas"
       const docRef = await addDoc(collection(db, "vagas"), dadosVaga);
-      console.log("Vaga salva com ID: ", docRef.id);
-      alert("Vaga salva com sucesso na nuvem! ✅");
+
+      console.log("Salvo com ID:", docRef.id);
+      alert("Vaga salva com sucesso no Banco de Dados! ✅");
     } catch (error) {
       console.error("Erro ao salvar:", error);
-      alert("Erro ao salvar no banco de dados.");
+      alert("Erro ao salvar. Pode ser que a imagem seja grande demais para o banco gratuito.");
     }
   };
 
