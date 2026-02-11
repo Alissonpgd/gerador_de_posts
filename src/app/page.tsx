@@ -1,190 +1,194 @@
 "use client";
 
-import { db } from "@/lib/firebase"; // A ponte que criamos
-import { collection, addDoc, serverTimestamp } from "firebase/firestore"; // Ferramentas do Firestore
-import { useState, useRef } from "react";
+import { useState, useRef, useEffect } from "react";
 import { VagaCard } from "@/components/VagaCard";
 import { toPng } from "html-to-image";
+import { db } from "@/lib/firebase";
+import {
+  collection,
+  addDoc,
+  getDocs,
+  query,
+  orderBy,
+  deleteDoc,
+  doc,
+  serverTimestamp
+} from "firebase/firestore";
 
 export default function Home() {
-  // --- ESTADOS (Memória do Sistema) ---
+  // --- ESTADOS ---
   const [titulo, setTitulo] = useState("Atendente de Telemarketing");
-  const [empresa, setEmpresa] = useState("Gorlami Pizzaria");
+  const [empresa, setEmpresa] = useState("Hospital Antonio Targino");
   const [subtitulo, setSubtitulo] = useState("com experiência");
   const [requisitos, setRequisitos] = useState("Boa comunicação\nProatividade\nEnsino médio completo");
   const [email, setEmail] = useState("rh.conectavagas@gmail.com");
   const [cor, setCor] = useState("#660022");
-
-  // Imagens em Base64 (Evita erros de segurança no download)
   const [logo, setLogo] = useState<string>("");
   const [foto, setFoto] = useState<string>("");
+  const [vagasSalvas, setVagasSalvas] = useState<any[]>([]);
 
-  // Referência para capturar a imagem
   const cardRef = useRef<HTMLDivElement>(null);
 
-  // --- LÓGICA DE IMAGEM (Base64) ---
+  // --- BUSCAR VAGAS (READ) ---
+  const buscarVagas = async () => {
+    try {
+      const q = query(collection(db, "vagas"), orderBy("criadoEm", "desc"));
+      const querySnapshot = await getDocs(q);
+      const lista = querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+      setVagasSalvas(lista);
+    } catch (error) {
+      console.error("Erro ao buscar:", error);
+    }
+  };
+
+  useEffect(() => {
+    buscarVagas();
+  }, []);
+
+  // --- LÓGICA DE IMAGEM ---
   const handleImageChange = (e: React.ChangeEvent<HTMLInputElement>, type: 'logo' | 'foto') => {
     const file = e.target.files?.[0];
     if (file) {
       const reader = new FileReader();
       reader.onloadend = () => {
-        const base64String = reader.result as string;
-        if (type === 'logo') setLogo(base64String);
-        else setFoto(base64String);
+        const base64 = reader.result as string;
+        if (type === 'logo') setLogo(base64);
+        else setFoto(base64);
       };
-      reader.readAsDataURL(file); // Converte o arquivo em texto (Base64)
+      reader.readAsDataURL(file);
     }
   };
 
-  // --- LÓGICA DE DOWNLOAD ---
-  const downloadImage = async () => {
-    if (cardRef.current === null) return;
-
+  // --- SALVAR VAGA (CREATE) ---
+  const salvarVaga = async () => {
     try {
-      // Pequeno delay para garantir que o DOM está pronto
-      const dataUrl = await toPng(cardRef.current, {
-        cacheBust: false,
-        pixelRatio: 2, // Imagem em alta definição
-        backgroundColor: '#ffffff',
-      });
+      const dados = {
+        titulo, empresa, subtitulo, email, cor, logoUrl: logo, imagemUrl: foto,
+        requisitos: requisitos.split("\n").filter(r => r !== ""),
+        criadoEm: serverTimestamp()
+      };
+      await addDoc(collection(db, "vagas"), dados);
+      alert("Salvo com sucesso! ✅");
+      buscarVagas(); // Atualiza a lista
+    } catch (e) { alert("Erro ao salvar."); }
+  };
 
+  // --- EXCLUIR VAGA (DELETE) ---
+  const excluirVaga = async (id: string) => {
+    if (window.confirm("Deseja realmente apagar esta vaga?")) {
+      try {
+        await deleteDoc(doc(db, "vagas", id));
+        setVagasSalvas(vagasSalvas.filter(v => v.id !== id));
+      } catch (e) { alert("Erro ao excluir."); }
+    }
+  };
+
+  // --- DOWNLOAD PNG ---
+  const downloadImage = async () => {
+    if (cardRef.current) {
+      const dataUrl = await toPng(cardRef.current, { pixelRatio: 2 });
       const link = document.createElement('a');
-      link.download = `vaga-${empresa.toLowerCase().replace(/\s+/g, '-')}.png`;
+      link.download = `vaga-${empresa}.png`;
       link.href = dataUrl;
       link.click();
-    } catch (err) {
-      console.error("Erro ao gerar imagem:", err);
-      alert("Erro técnico ao gerar PNG. Tente usar uma imagem de fundo menor ou mude o navegador.");
-    }
-  };
-
-  // --- LÓGICA DE SALVAR NO BANCO ---
-  const salvarVaga = async () => {
-    // Verificação simples para não salvar sem título
-    if (!titulo || !empresa) {
-      alert("Por favor, preencha o título e a empresa.");
-      return;
-    }
-
-    try {
-      // 1. Criamos o objeto com TUDO, incluindo as imagens em Base64
-      const dadosVaga = {
-        titulo,
-        empresa,
-        subtitulo,
-        email,
-        requisitos: requisitos.split("\n").filter(r => r !== ""),
-        cor,
-        logoUrl: logo, // Aqui vai o texto da imagem (Base64)
-        imagemUrl: foto, // Aqui vai o texto da imagem de fundo (Base64)
-        criadoEm: new Date().toISOString(), // Usando data comum para simplificar
-      };
-
-      // 2. Salvamos direto na coleção "vagas"
-      const docRef = await addDoc(collection(db, "vagas"), dadosVaga);
-
-      console.log("Salvo com ID:", docRef.id);
-      alert("Vaga salva com sucesso no Banco de Dados! ✅");
-    } catch (error) {
-      console.error("Erro ao salvar:", error);
-      alert("Erro ao salvar. Pode ser que a imagem seja grande demais para o banco gratuito.");
     }
   };
 
   return (
-    <div className="flex min-h-screen bg-zinc-200 p-4 md:p-8 font-sans text-black">
-      <div className="flex flex-col lg:flex-row gap-8 w-full max-w-7xl mx-auto items-start">
+    <div className="min-h-screen bg-zinc-200 p-4 md:p-8 font-sans text-black">
+      <div className="max-w-7xl mx-auto flex flex-col gap-16">
 
-        {/* CONFIGURAÇÃO (PAINEL ESQUERDO) */}
-        <section className="w-full lg:w-[400px] bg-white p-6 rounded-2xl shadow-xl space-y-5 sticky top-8">
-          <header className="border-b pb-3 mb-4">
-            <h1 className="text-2xl font-black italic text-red-900 leading-none">RH CONECTA</h1>
-            <p className="text-[10px] text-gray-400 font-bold uppercase tracking-widest mt-1">Gerador de Posts Profissionais</p>
-          </header>
+        {/* SEÇÃO SUPERIOR: GERADOR */}
+        <div className="flex flex-col lg:flex-row gap-8 w-full items-start">
 
-          <div className="space-y-4">
-            <div className="grid gap-3">
+          {/* PAINEL ESQUERDO */}
+          <section className="w-full lg:w-[400px] bg-white p-6 rounded-2xl shadow-xl space-y-5 sticky top-8">
+            <header className="border-b pb-3 mb-4 text-red-900 font-black italic">
+              <h1 className="text-2xl">RH CONECTA</h1>
+              <p className="text-[10px] text-gray-400 uppercase tracking-widest">Gerador Profissional</p>
+            </header>
+
+            <div className="space-y-4">
               <div className="flex flex-col">
-                <label className="text-[10px] font-black uppercase text-gray-400 mb-1">Cargo / Vaga</label>
-                <input className="border-2 p-2 rounded-lg outline-none focus:border-red-800 text-sm" value={titulo} onChange={e => setTitulo(e.target.value)} />
+                <label className="text-[10px] font-bold text-gray-400 uppercase">Cargo</label>
+                <input className="border-2 p-2 rounded-lg text-sm" value={titulo} onChange={e => setTitulo(e.target.value)} />
+              </div>
+              <div className="flex flex-col">
+                <label className="text-[10px] font-bold text-gray-400 uppercase">Empresa</label>
+                <input className="border-2 p-2 rounded-lg text-sm" value={empresa} onChange={e => setEmpresa(e.target.value)} />
+              </div>
+              <div className="flex flex-col">
+                <label className="text-[10px] font-bold text-gray-400 uppercase">Email</label>
+                <input className="border-2 p-2 rounded-lg text-sm" value={email} onChange={e => setEmail(e.target.value)} />
+              </div>
+              <div className="flex flex-col">
+                <label className="text-[10px] font-bold text-gray-400 uppercase">Requisitos</label>
+                <textarea className="border-2 p-2 rounded-lg h-20 text-sm" value={requisitos} onChange={e => setRequisitos(e.target.value)} />
               </div>
 
-              <div className="flex flex-col">
-                <label className="text-[10px] font-black uppercase text-gray-400 mb-1">Nome da Empresa</label>
-                <input className="border-2 p-2 rounded-lg outline-none focus:border-red-800 text-sm" value={empresa} onChange={e => setEmpresa(e.target.value)} />
+              <div className="grid grid-cols-2 gap-2">
+                <input type="file" onChange={e => handleImageChange(e, 'logo')} className="text-[10px]" />
+                <input type="file" onChange={e => handleImageChange(e, 'foto')} className="text-[10px]" />
               </div>
-
-              <div className="flex flex-col">
-                <label className="text-[10px] font-black uppercase text-gray-400 mb-1">Subtítulo</label>
-                <input className="border-2 p-2 rounded-lg outline-none focus:border-red-800 text-sm" value={subtitulo} onChange={e => setSubtitulo(e.target.value)} />
-              </div>
-
-              <div className="flex flex-col">
-                <label className="text-[10px] font-black uppercase text-gray-400 mb-1">Email de Contato</label>
-                <input className="border-2 p-2 rounded-lg outline-none focus:border-red-800 text-sm font-bold" value={email} onChange={e => setEmail(e.target.value)} />
-              </div>
-
-              <div className="flex flex-col">
-                <label className="text-[10px] font-black uppercase text-gray-400 mb-1">Requisitos</label>
-                <textarea className="border-2 p-2 rounded-lg outline-none focus:border-red-800 h-20 text-sm" value={requisitos} onChange={e => setRequisitos(e.target.value)} />
-              </div>
+              <input type="color" value={cor} onChange={e => setCor(e.target.value)} className="w-full h-8 cursor-pointer" />
             </div>
 
-            <div className="p-4 bg-gray-50 rounded-xl space-y-3">
-              <div className="grid grid-cols-2 gap-2 text-[10px]">
-                <div>
-                  <label className="font-bold uppercase text-gray-400 block mb-1">Logo</label>
-                  <input type="file" accept="image/*" onChange={e => handleImageChange(e, 'logo')} className="w-full" />
-                </div>
-                <div>
-                  <label className="font-bold uppercase text-gray-400 block mb-1">Fundo</label>
-                  <input type="file" accept="image/*" onChange={e => handleImageChange(e, 'foto')} className="w-full" />
-                </div>
-              </div>
-              <div>
-                <label className="text-[10px] font-bold uppercase text-gray-400 block mb-1">Cor Principal</label>
-                <input type="color" value={cor} onChange={e => setCor(e.target.value)} className="w-full h-8 cursor-pointer rounded" />
-              </div>
+            <div className="pt-4 flex flex-col gap-3">
+              <button onClick={downloadImage} className="bg-red-900 text-white py-3 rounded-full font-bold uppercase text-xs">Baixar PNG</button>
+              <button onClick={salvarVaga} className="bg-zinc-800 text-white py-3 rounded-full font-bold uppercase text-xs">💾 Salvar na Nuvem</button>
             </div>
+          </section>
+
+          {/* PAINEL DIREITO: PREVIEW */}
+          <section className="flex-1 flex flex-col items-center">
+            <div ref={cardRef}>
+              <VagaCard
+                titulo={titulo} nomeEmpresa={empresa} subtitulo={subtitulo}
+                requisitos={requisitos.split("\n").filter(r => r !== "")}
+                emailContato={email} logoUrl={logo} imagemUrl={foto} corPrincipal={cor}
+              />
+            </div>
+          </section>
+        </div>
+
+        {/* SEÇÃO INFERIOR: HISTÓRICO (Onde entra a lixeira) */}
+        <section className="w-full border-t border-zinc-300 pt-10 pb-20">
+          <h2 className="text-3xl font-black text-gray-800 italic uppercase mb-8">Histórico de Vagas</h2>
+          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6">
+            {vagasSalvas.map((vaga) => (
+              <div
+                key={vaga.id}
+                className="bg-white p-5 rounded-2xl shadow-md border-t-8 flex flex-col justify-between group relative transition-all hover:shadow-xl"
+                style={{ borderColor: vaga.cor }}
+              >
+                {/* BOTÃO LIXEIRA */}
+                <button
+                  onClick={(e) => { e.stopPropagation(); excluirVaga(vaga.id); }}
+                  className="absolute top-2 right-2 p-2 text-gray-300 hover:text-red-600 opacity-0 group-hover:opacity-100 transition-all"
+                >
+                  <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 6h18M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2M10 11v6M14 11v6" /></svg>
+                </button>
+
+                <div>
+                  <h3 className="font-bold text-gray-800 uppercase text-sm mb-1 line-clamp-1">{vaga.titulo}</h3>
+                  <p className="text-[10px] text-gray-400 font-bold uppercase tracking-widest">{vaga.empresa}</p>
+                </div>
+
+                <button
+                  onClick={() => {
+                    setTitulo(vaga.titulo); setEmpresa(vaga.empresa); setSubtitulo(vaga.subtitulo);
+                    setEmail(vaga.email); setRequisitos(vaga.requisitos.join("\n"));
+                    setCor(vaga.cor); setLogo(vaga.logoUrl); setFoto(vaga.imagemUrl);
+                    window.scrollTo({ top: 0, behavior: 'smooth' });
+                  }}
+                  className="mt-4 w-full py-2 bg-zinc-100 group-hover:bg-red-900 group-hover:text-white text-gray-500 text-[10px] font-black rounded-lg transition-all"
+                >
+                  RE-EDITAR
+                </button>
+              </div>
+            ))}
           </div>
         </section>
-
-        {/* PREVIEW E DOWNLOAD (PAINEL DIREITO) */}
-        <section className="flex-1 flex flex-col items-center">
-          <div className="mb-4">
-            <span className="bg-white px-4 py-1 rounded-full text-[10px] font-bold text-gray-400 uppercase tracking-widest shadow-sm">Preview do Post</span>
-          </div>
-
-          {/* O Card que será baixado */}
-          <div ref={cardRef} className="bg-white shadow-2xl rounded-sm">
-            <VagaCard
-              titulo={titulo}
-              nomeEmpresa={empresa}
-              subtitulo={subtitulo}
-              requisitos={requisitos.split("\n").filter(r => r !== "")}
-              emailContato={email}
-              logoUrl={logo}
-              imagemUrl={foto}
-              corPrincipal={cor}
-            />
-          </div>
-          <div className="mt-6 flex flex-col gap-3 w-full max-w-[300px]">
-            <button
-              onClick={downloadImage}
-              className="bg-red-900 text-white py-3 rounded-full font-black uppercase text-xs tracking-widest shadow-lg hover:bg-red-800 transition-all"
-            >
-              Baixar Post (PNG)
-            </button>
-
-            <button
-              onClick={salvarVaga}
-              className="bg-zinc-800 text-white py-3 rounded-full font-black uppercase text-xs tracking-widest shadow-lg hover:bg-zinc-700 transition-all flex items-center justify-center gap-2"
-            >
-              <span>💾</span> Salvar na Nuvem
-            </button>
-          </div>
-        </section>
-
       </div>
     </div>
   );
