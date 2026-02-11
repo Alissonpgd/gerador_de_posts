@@ -55,10 +55,10 @@ export const VagaCard = ({
                     )}
                 </div>
 
-                {/* REQUISITOS - flex-1 faz ele ocupar o espaço que sobra, mas sem empurrar o resto pra fora */}
+                {/* REQUISITOS & BENEFICIOS - flex-1 faz ele ocupar o espaço que sobra, mas sem empurrar o resto pra fora */}
                 <div className="mt-6 flex-1 overflow-hidden">
                     <h3 className="font-bold text-gray-800 border-b-2 mb-3 inline-block text-[12px] uppercase tracking-widest" style={{ borderColor: corPrincipal }}>
-                        Requisitos:
+                        Requisitos & Benefícios:
                     </h3>
                     <ul className="space-y-1.5">
                         {requisitos.slice(0, 6).map((req, index) => ( // Limitamos a 6 itens para não quebrar o layout
