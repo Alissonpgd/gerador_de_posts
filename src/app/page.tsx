@@ -1,5 +1,7 @@
 "use client";
 
+import { db } from "@/lib/firebase"; // A ponte que criamos
+import { collection, addDoc, serverTimestamp } from "firebase/firestore"; // Ferramentas do Firestore
 import { useState, useRef } from "react";
 import { VagaCard } from "@/components/VagaCard";
 import { toPng } from "html-to-image";
@@ -53,6 +55,30 @@ export default function Home() {
     } catch (err) {
       console.error("Erro ao gerar imagem:", err);
       alert("Erro técnico ao gerar PNG. Tente usar uma imagem de fundo menor ou mude o navegador.");
+    }
+  };
+
+  // --- LÓGICA DE SALVAR NO BANCO ---
+  const salvarVaga = async () => {
+    // 1. Criamos um objeto com os dados (apenas textos por enquanto)
+    const dadosVaga = {
+      titulo,
+      empresa,
+      subtitulo,
+      email,
+      requisitos: requisitos.split("\n").filter(r => r !== ""),
+      cor,
+      criadoEm: serverTimestamp(), // Registra a data/hora exata que foi salvo
+    };
+
+    try {
+      // 2. Enviamos para a coleção "vagas" no Firestore
+      const docRef = await addDoc(collection(db, "vagas"), dadosVaga);
+      console.log("Vaga salva com ID: ", docRef.id);
+      alert("Vaga salva com sucesso na nuvem! ✅");
+    } catch (error) {
+      console.error("Erro ao salvar:", error);
+      alert("Erro ao salvar no banco de dados.");
     }
   };
 
@@ -133,14 +159,21 @@ export default function Home() {
               corPrincipal={cor}
             />
           </div>
+          <div className="mt-6 flex flex-col gap-3 w-full max-w-[300px]">
+            <button
+              onClick={downloadImage}
+              className="bg-red-900 text-white py-3 rounded-full font-black uppercase text-xs tracking-widest shadow-lg hover:bg-red-800 transition-all"
+            >
+              Baixar Post (PNG)
+            </button>
 
-          <button
-            onClick={downloadImage}
-            className="mt-8 bg-red-900 hover:bg-red-800 text-white px-10 py-4 rounded-full font-black text-sm uppercase tracking-widest shadow-xl transition-all hover:scale-105 active:scale-95"
-          >
-            Baixar Post (PNG)
-          </button>
-          <p className="mt-3 text-[10px] text-gray-500 font-bold uppercase tracking-tighter italic">Formato ideal para Instagram e WhatsApp</p>
+            <button
+              onClick={salvarVaga}
+              className="bg-zinc-800 text-white py-3 rounded-full font-black uppercase text-xs tracking-widest shadow-lg hover:bg-zinc-700 transition-all flex items-center justify-center gap-2"
+            >
+              <span>💾</span> Salvar na Nuvem
+            </button>
+          </div>
         </section>
 
       </div>
