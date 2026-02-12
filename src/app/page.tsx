@@ -104,7 +104,7 @@ export default function Home() {
           {/* PAINEL ESQUERDO */}
           <section className="w-full lg:w-[400px] bg-white p-6 rounded-2xl shadow-xl space-y-5 sticky top-8">
             <header className="border-b pb-3 mb-4 text-red-900 font-black italic">
-              <h1 className="text-2xl">RH CONECTA</h1>
+              <h1 className="text-2xl">RH CONECTA VAGA</h1>
               <p className="text-[10px] text-gray-400 uppercase tracking-widest">Gerador Profissional</p>
             </header>
 
@@ -126,7 +126,7 @@ export default function Home() {
                 <input className="border-2 p-2 rounded-lg text-sm" value={email} onChange={e => setEmail(e.target.value)} />
               </div>
               <div className="flex flex-col">
-                <label className="text-[10px] font-bold text-gray-400 uppercase">Requisitos</label>
+                <label className="text-[10px] font-bold text-gray-400 uppercase">Requisitos e Beneficios</label>
                 <textarea className="border-2 p-2 rounded-lg h-20 text-sm" value={requisitos} onChange={e => setRequisitos(e.target.value)} />
               </div>
 
