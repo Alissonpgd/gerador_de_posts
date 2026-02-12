@@ -131,8 +131,8 @@ export default function Home() {
               </div>
 
               <div className="grid grid-cols-2 gap-2">
-                <input type="file" onChange={e => handleImageChange(e, 'logo')} className="text-[20px]" />
-                <input type="file" onChange={e => handleImageChange(e, 'foto')} className="text-[20px]" />
+                <input type="file" onChange={e => handleImageChange(e, 'logo')} className="text-[10px]" />
+                <input type="file" onChange={e => handleImageChange(e, 'foto')} className="text-[10px]" />
               </div>
               <input type="color" value={cor} onChange={e => setCor(e.target.value)} className="w-full h-8 cursor-pointer" />
             </div>
