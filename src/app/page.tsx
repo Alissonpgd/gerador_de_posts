@@ -115,7 +115,7 @@ export default function Home() {
               </div>
               <div className="flex flex-col">
                 <label className="text-[10px] font-bold text-gray-400 uppercase">Subtitulo</label>
-                <input className="border-2 p-2 rounded-lg text-sm" value={subtitulo} onChange={e => setTitulo(e.target.value)} />
+                <input className="border-2 p-2 rounded-lg text-sm" value={subtitulo} onChange={e => setSubtitulo(e.target.value)} />
               </div>
               <div className="flex flex-col">
                 <label className="text-[10px] font-bold text-gray-400 uppercase">Empresa</label>
