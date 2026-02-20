@@ -2,247 +2,222 @@
 
 import { useState, useRef, useEffect } from "react";
 import { VagaCard } from "@/components/VagaCard";
+import { SocialCard } from "@/components/SocialCard";
 import { toPng } from "html-to-image";
 import { db } from "@/lib/firebase";
-import {
-  collection,
-  addDoc,
-  getDocs,
-  query,
-  orderBy,
-  deleteDoc,
-  doc,
-  serverTimestamp
-} from "firebase/firestore";
+import { collection, addDoc, getDocs, query, orderBy, deleteDoc, doc, serverTimestamp } from "firebase/firestore";
+
+const bancoFrases = {
+  "Bom dia": ["Que seu dia seja produtivo!", "O sucesso é o que você faz hoje.", "Café na mão e foco na missão.", "Hoje coisas boas vão acontecer."],
+  "Boa tarde": ["Mantenha o foco!", "Pausa para o café.", "Respire fundo e siga em frente.", "O otimismo é o imã de coisas boas."],
+  "Boa noite": ["Descanse a mente.", "Missão cumprida.", "Amanhã temos novos sonhos.", "Gratidão pelo dia que passou."]
+};
+
+const opcoesFontes = [
+  { name: "Montserrat", value: "Montserrat" },
+  { name: "Playfair Display", value: "Playfair Display" },
+  { name: "Bebas Neue", value: "Bebas Neue" },
+  { name: "Caveat", value: "Caveat" },
+  { name: "Pacifico", value: "Pacifico" },
+  { name: "Anton", value: "Anton" },
+  { name: "Dancing Script", value: "Dancing Script" },
+  { name: "Satisfy", value: "Satisfy" },
+  { name: "Amatic SC", value: "Amatic SC" },
+  { name: "Roboto", value: "Roboto" },
+  { name: "Oswald", value: "Oswald" }
+];
 
 export default function Home() {
-  // --- ESTADOS (A Memória do seu Formulário) ---
-  const [titulo, setTitulo] = useState("");
-  const [empresa, setEmpresa] = useState("");
-  const [subtitulo, setSubtitulo] = useState("");
-  const [requisitos, setRequisitos] = useState("");
-  const [email, setEmail] = useState("");
-  const [cor, setCor] = useState("#660022");
-  const [logo, setLogo] = useState<string>("");
-  const [foto, setFoto] = useState<string>("");
-  const [vagasSalvas, setVagasSalvas] = useState<any[]>([]);
+  const [modo, setModo] = useState<'manual' | 'social'>('manual');
 
+  // --- MODO MANUAL (INTACTO) ---
+  const [titulo, setTitulo] = useState("");
+  const [subtitulo, setSubtitulo] = useState("");
+  const [empresa, setEmpresa] = useState("");
+  const [email, setEmail] = useState("");
+  const [requisitos, setRequisitos] = useState("");
+  const [logoManual, setLogoManual] = useState("");
+  const [fotoManual, setFotoManual] = useState("");
+
+  // --- MODO SOCIAL ---
+  const [saudacao, setSaudacao] = useState<keyof typeof bancoFrases>("Bom dia");
+  const [fraseSocial, setFraseSocial] = useState(bancoFrases["Bom dia"][0]);
+
+  // Estados Título (Saudação)
+  const [fonteSaudacao, setFonteSaudacao] = useState("Montserrat");
+  const [corFonteS, setCorFonteS] = useState("#FFFFFF");
+  const [tamS, setTamS] = useState(20);
+  const [xS, setXS] = useState(0);
+  const [yS, setYS] = useState(0);
+  const [fundoS, setFundoS] = useState(true);
+  const [sombraS, setSombraS] = useState({ x: 2, y: 2, blur: 4, cor: "#000000", ativa: false });
+
+  // Estados Frase
+  const [fonteFrase, setFonteFrase] = useState("Montserrat");
+  const [corFonteF, setCorFonteF] = useState("#1a1a1a");
+  const [tamF, setTamF] = useState(45);
+  const [xF, setXF] = useState(0);
+  const [yF, setYF] = useState(0);
+  const [sombraF, setSombraF] = useState({ x: 2, y: 2, blur: 8, cor: "#000000", ativa: false });
+
+  // Fundo
+  const [fotoSocial, setFotoSocial] = useState("");
+  const [opacidadeS, setOpacidadeS] = useState(0.2);
+  const [blurS, setBlurS] = useState(0);
+
+  const [cor, setCor] = useState("#660022");
+  const [vagasSalvas, setVagasSalvas] = useState<any[]>([]);
   const cardRef = useRef<HTMLDivElement>(null);
 
-  // --- BUSCAR VAGAS (READ) ---
-  const buscarVagas = async () => {
-    try {
-      const q = query(collection(db, "vagas"), orderBy("criadoEm", "desc"));
-      const querySnapshot = await getDocs(q);
-      const lista = querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-      setVagasSalvas(lista);
-    } catch (error) {
-      console.error("Erro ao buscar:", error);
-    }
-  };
-
   useEffect(() => {
-    buscarVagas();
+    const buscar = async () => {
+      const q = query(collection(db, "vagas"), orderBy("criadoEm", "desc"));
+      const snap = await getDocs(q);
+      setVagasSalvas(snap.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+    };
+    buscar();
   }, []);
 
-  // --- LÓGICA DE IMAGEM (Conversão para Base64) ---
-  const handleImageChange = (e: React.ChangeEvent<HTMLInputElement>, type: 'logo' | 'foto') => {
+  const handleImage = (e: React.ChangeEvent<HTMLInputElement>, target: string) => {
     const file = e.target.files?.[0];
     if (file) {
       const reader = new FileReader();
       reader.onloadend = () => {
-        const base64 = reader.result as string;
-        if (type === 'logo') setLogo(base64);
-        else setFoto(base64);
+        const b64 = reader.result as string;
+        if (target === 'logo') setLogoManual(b64);
+        else if (target === 'foto') setFotoManual(b64);
+        else if (target === 'fotoSocial') setFotoSocial(b64);
       };
       reader.readAsDataURL(file);
     }
   };
 
-  // --- SALVAR VAGA (CREATE) ---
-  const salvarVaga = async () => {
-    if (!titulo || !empresa) {
-      alert("Por favor, preencha o título e a empresa antes de salvar.");
-      return;
-    }
-    try {
-      const dados = {
-        titulo, empresa, subtitulo, email, cor, logoUrl: logo, imagemUrl: foto,
-        requisitos: requisitos.split("\n").filter(r => r !== ""),
-        criadoEm: serverTimestamp()
-      };
-      await addDoc(collection(db, "vagas"), dados);
-      alert("Vaga salva com sucesso na nuvem! ✅");
-      buscarVagas();
-    } catch (e) { alert("Erro ao salvar."); }
-  };
-
-  // --- EXCLUIR VAGA (DELETE) ---
-  const excluirVaga = async (id: string) => {
-    if (window.confirm("Deseja realmente apagar esta vaga do histórico?")) {
-      try {
-        await deleteDoc(doc(db, "vagas", id));
-        setVagasSalvas(vagasSalvas.filter(v => v.id !== id));
-      } catch (e) { alert("Erro ao excluir."); }
-    }
-  };
-
-  // --- DOWNLOAD PNG ---
-  const downloadImage = async () => {
+  const download = async () => {
     if (cardRef.current) {
       const dataUrl = await toPng(cardRef.current, { pixelRatio: 2, cacheBust: true });
       const link = document.createElement('a');
-      link.download = `vaga-${empresa || 'rh-conecta'}.png`;
-      link.href = dataUrl;
-      link.click();
+      link.download = `rh-conecta.png`; link.href = dataUrl; link.click();
     }
   };
 
   return (
-    <div className="min-h-screen bg-zinc-200 p-4 md:p-8 font-sans text-black">
-      <div className="max-w-7xl mx-auto flex flex-col gap-16">
+    <div className="min-h-screen bg-slate-100 p-4 md:p-8 font-sans text-black">
+      <div className="max-w-7xl mx-auto flex flex-col gap-8">
 
-        {/* SEÇÃO SUPERIOR: GERADOR (FORMULÁRIO + PREVIEW) */}
-        <div className="flex flex-col lg:flex-row gap-8 w-full items-start">
+        <div className="flex bg-white p-1 rounded-2xl shadow-xl max-w-sm mx-auto border">
+          <button onClick={() => setModo('manual')} className={`flex-1 py-3 rounded-xl font-bold text-xs uppercase transition-all ${modo === 'manual' ? 'bg-red-900 text-white shadow-lg' : 'text-gray-400'}`}>✍️ Vagas</button>
+          <button onClick={() => setModo('social')} className={`flex-1 py-3 rounded-xl font-bold text-xs uppercase transition-all ${modo === 'social' ? 'bg-orange-500 text-white shadow-lg' : 'text-gray-400'}`}>☀️ Saudações</button>
+        </div>
 
-          {/* PAINEL ESQUERDO: CONFIGURAÇÃO */}
-          <section className="w-full lg:w-[400px] bg-white p-6 rounded-2xl shadow-xl space-y-5 sticky top-8">
-            <header className="border-b pb-3 mb-4 text-red-900 font-black italic">
-              <h1 className="text-2xl leading-none uppercase">RH Conecta Vaga</h1>
-              <p className="text-[10px] text-gray-400 uppercase tracking-widest mt-1">Gerador Profissional</p>
-            </header>
+        <div className="flex flex-col lg:flex-row gap-8 items-start">
+          <section className="w-full lg:w-[420px] bg-white p-6 rounded-2xl shadow-xl space-y-5 border overflow-y-auto max-h-[85vh]">
+            <h1 className="text-2xl font-black italic text-red-900 uppercase">RH CONECTA VAGAS</h1>
 
-            <div className="space-y-4">
-              <div className="flex flex-col">
-                <label className="text-[10px] font-bold text-gray-400 uppercase italic">Cargo / Vaga</label>
-                <input className="border-2 p-2 rounded-lg text-sm outline-none focus:border-red-800 transition-all" value={titulo} onChange={e => setTitulo(e.target.value)} />
+            {modo === 'manual' ? (
+              <div className="space-y-4 animate-in fade-in">
+                <input placeholder="Cargo" className="w-full border-2 p-2 rounded-lg text-sm outline-none" value={titulo} onChange={e => setTitulo(e.target.value)} />
+                <input placeholder="Subtitulo" className="w-full border-2 p-2 rounded-lg text-sm outline-none" value={subtitulo} onChange={e => setSubtitulo(e.target.value)} />
+                <input placeholder="Empresa" className="w-full border-2 p-2 rounded-lg text-sm outline-none" value={empresa} onChange={e => setEmpresa(e.target.value)} />
+                <input placeholder="Email" className="w-full border-2 p-2 rounded-lg text-sm outline-none" value={email} onChange={e => setEmail(e.target.value)} />
+                <textarea placeholder="Requisitos" className="w-full border-2 p-2 rounded-lg h-24 text-sm outline-none" value={requisitos} onChange={e => setRequisitos(e.target.value)} />
+                <div className="grid grid-cols-2 gap-2 text-[10px] font-bold text-gray-400 uppercase">
+                  <label className="border-2 border-dashed h-16 rounded-lg flex items-center justify-center cursor-pointer">{logoManual ? "Logo OK" : "Logo"}<input type="file" className="hidden" onChange={e => handleImage(e, 'logo')} /></label>
+                  <label className="border-2 border-dashed h-16 rounded-lg flex items-center justify-center cursor-pointer">{fotoManual ? "Fundo OK" : "Fundo"}<input type="file" className="hidden" onChange={e => handleImage(e, 'foto')} /></label>
+                </div>
               </div>
-              <div className="flex flex-col">
-                <label className="text-[10px] font-bold text-gray-400 uppercase italic">Subtitulo (ex: com experiência)</label>
-                <input className="border-2 p-2 rounded-lg text-sm outline-none focus:border-red-800 transition-all" value={subtitulo} onChange={e => setSubtitulo(e.target.value)} />
-              </div>
-              <div className="flex flex-col">
-                <label className="text-[10px] font-bold text-gray-400 uppercase italic">Nome da Empresa</label>
-                <input className="border-2 p-2 rounded-lg text-sm outline-none focus:border-red-800 transition-all" value={empresa} onChange={e => setEmpresa(e.target.value)} />
-              </div>
-              <div className="flex flex-col">
-                <label className="text-[10px] font-bold text-gray-400 uppercase italic">Email de Contato</label>
-                <input className="border-2 p-2 rounded-lg text-sm outline-none focus:border-red-800 transition-all font-bold" value={email} onChange={e => setEmail(e.target.value)} />
-              </div>
-              <div className="flex flex-col">
-                <label className="text-[10px] font-bold text-gray-400 uppercase italic">Requisitos e Benefícios</label>
-                <textarea className="border-2 p-2 rounded-lg h-24 text-sm outline-none focus:border-red-800 transition-all" value={requisitos} onChange={e => setRequisitos(e.target.value)} />
-              </div>
-
-              {/* ÁREA DE UPLOADS ESTILIZADA */}
-              <div className="grid grid-cols-2 gap-4">
-                <div className="flex flex-col gap-1">
-                  <label className="text-[10px] font-bold text-gray-400 uppercase italic">Logo</label>
-                  <label htmlFor="logo-input" className="cursor-pointer border-2 border-dashed border-gray-300 rounded-xl h-24 flex flex-col items-center justify-center bg-gray-50 hover:border-red-800 hover:bg-red-50 transition-all overflow-hidden group">
-                    {logo ? (
-                      <img src={logo} alt="Preview Logo" className="w-full h-full object-contain p-2" />
-                    ) : (
-                      <div className="flex flex-col items-center text-gray-400 group-hover:text-red-800">
-                        <span className="text-2xl mb-1">🏢</span>
-                        <span className="text-[8px] font-black uppercase tracking-tighter">Subir Logo</span>
-                      </div>
-                    )}
+            ) : (
+              <div className="space-y-6 animate-in slide-in-from-right-4">
+                {/* FUNDO */}
+                <div className="p-3 bg-orange-50 rounded-xl border border-orange-100 space-y-2">
+                  <label className="border-2 border-dashed h-12 rounded-lg flex items-center justify-center cursor-pointer bg-white text-[9px] font-black uppercase text-orange-400">
+                    {fotoSocial ? "IMAGEM OK" : "📸 Foto de Fundo"}
+                    <input type="file" className="hidden" onChange={e => handleImage(e, 'fotoSocial')} />
                   </label>
-                  <input id="logo-input" type="file" accept="image/*" onChange={e => handleImageChange(e, 'logo')} className="hidden" />
+                  <div className="grid grid-cols-2 gap-2 text-[8px] font-black uppercase text-orange-600">
+                    <div>OPAC<input type="range" min="0" max="1" step="0.1" value={opacidadeS} onChange={e => setOpacidadeS(Number(e.target.value))} className="w-full" /></div>
+                    <div>BLUR<input type="range" min="0" max="10" step="1" value={blurS} onChange={e => setBlurS(Number(e.target.value))} className="w-full" /></div>
+                  </div>
                 </div>
 
-                <div className="flex flex-col gap-1">
-                  <label className="text-[10px] font-bold text-gray-400 uppercase italic">Foto Fundo</label>
-                  <label htmlFor="foto-input" className="cursor-pointer border-2 border-dashed border-gray-300 rounded-xl h-24 flex flex-col items-center justify-center bg-gray-50 hover:border-red-800 hover:bg-red-50 transition-all overflow-hidden group">
-                    {foto ? (
-                      <img src={foto} alt="Preview Fundo" className="w-full h-full object-cover" />
-                    ) : (
-                      <div className="flex flex-col items-center text-gray-400 group-hover:text-red-800">
-                        <span className="text-2xl mb-1">📸</span>
-                        <span className="text-[8px] font-black uppercase tracking-tighter">Foto Fundo</span>
+                {/* CONTROLES TÍTULO */}
+                <div className="p-3 bg-white rounded-xl border border-zinc-200 space-y-3 shadow-sm">
+                  <div className="flex gap-2">
+                    <select value={saudacao} onChange={e => setSaudacao(e.target.value as any)} className="flex-1 p-1 border rounded text-xs outline-none"><option value="Bom dia">Bom dia</option><option value="Boa tarde">Boa tarde</option><option value="Boa noite">Boa noite</option></select>
+                    <button onClick={() => setFundoS(!fundoS)} className={`px-2 py-1 rounded text-[8px] font-black ${fundoS ? 'bg-orange-500 text-white' : 'bg-zinc-100'}`}>FUNDO</button>
+                    <button onClick={() => setSombraS({ ...sombraS, ativa: !sombraS.ativa })} className={`px-2 py-1 rounded text-[8px] font-black ${sombraS.ativa ? 'bg-indigo-500 text-white' : 'bg-zinc-100'}`}>SOMBRA</button>
+                  </div>
+                  <div className="grid grid-cols-2 gap-2">
+                    <select value={fonteSaudacao} onChange={e => setFonteSaudacao(e.target.value)} className="p-1 border rounded text-xs">{opcoesFontes.map(f => <option key={f.value} value={f.value}>{f.name}</option>)}</select>
+                    <input type="color" value={corFonteS} onChange={e => setCorFonteS(e.target.value)} className="w-full h-8 cursor-pointer rounded bg-transparent" />
+                  </div>
+                  <div className="grid grid-cols-3 gap-2 text-[8px] font-bold uppercase text-zinc-400">
+                    <div>TAM<input type="range" min="10" max="80" value={tamS} onChange={e => setTamS(Number(e.target.value))} className="w-full h-1" /></div>
+                    <div>X<input type="range" min="-150" max="150" value={xS} onChange={e => setXS(Number(e.target.value))} className="w-full h-1" /></div>
+                    <div>Y<input type="range" min="-100" max="150" value={yS} onChange={e => setYS(Number(e.target.value))} className="w-full h-1" /></div>
+                  </div>
+                  {sombraS.ativa && (
+                    <div className="p-2 bg-indigo-50 rounded-lg space-y-2 border border-indigo-100">
+                      <div className="grid grid-cols-3 gap-2 text-[7px] font-black text-indigo-400">
+                        <div>S-X<input type="range" min="-20" max="20" value={sombraS.x} onChange={e => setSombraS({ ...sombraS, x: Number(e.target.value) })} className="w-full h-1" /></div>
+                        <div>S-Y<input type="range" min="-20" max="20" value={sombraS.y} onChange={e => setSombraS({ ...sombraS, y: Number(e.target.value) })} className="w-full h-1" /></div>
+                        <div>BLUR<input type="range" min="0" max="30" value={sombraS.blur} onChange={e => setSombraS({ ...sombraS, blur: Number(e.target.value) })} className="w-full h-1" /></div>
                       </div>
-                    )}
-                  </label>
-                  <input id="foto-input" type="file" accept="image/*" onChange={e => handleImageChange(e, 'foto')} className="hidden" />
+                      <input type="color" value={sombraS.cor} onChange={e => setSombraS({ ...sombraS, cor: e.target.value })} className="w-full h-4 cursor-pointer rounded" />
+                    </div>
+                  )}
+                </div>
+
+                {/* CONTROLES FRASE */}
+                <div className="p-3 bg-white rounded-xl border border-zinc-200 space-y-3 shadow-sm">
+                  <div className="flex gap-2">
+                    <select value={fonteFrase} onChange={e => setFonteFrase(e.target.value)} className="flex-1 p-1 border rounded text-xs">{opcoesFontes.map(f => <option key={f.value} value={f.value}>{f.name}</option>)}</select>
+                    <button onClick={() => setSombraF({ ...sombraF, ativa: !sombraF.ativa })} className={`px-2 py-1 rounded text-[8px] font-black ${sombraF.ativa ? 'bg-indigo-500 text-white' : 'bg-zinc-100'}`}>SOMBRA</button>
+                  </div>
+                  <div className="grid grid-cols-2 gap-2">
+                    <div className="flex flex-col"><label className="text-[7px] font-bold text-zinc-400">COR TEXTO</label><input type="color" value={corFonteF} onChange={e => setCorFonteF(e.target.value)} className="w-full h-8 cursor-pointer rounded bg-transparent" /></div>
+                    {sombraF.ativa && <div className="flex flex-col"><label className="text-[7px] font-bold text-indigo-400 uppercase">COR SOMBRA</label><input type="color" value={sombraF.cor} onChange={e => setSombraF({ ...sombraF, cor: e.target.value })} className="w-full h-8 cursor-pointer rounded bg-transparent" /></div>}
+                  </div>
+                  <div className="grid grid-cols-3 gap-2 text-[8px] font-bold uppercase text-zinc-400">
+                    <div>TAM<input type="range" min="20" max="100" value={tamF} onChange={e => setTamF(Number(e.target.value))} className="w-full h-1" /></div>
+                    <div>X<input type="range" min="-200" max="200" value={xF} onChange={e => setXF(Number(e.target.value))} className="w-full h-1" /></div>
+                    <div>Y<input type="range" min="-100" max="300" value={yF} onChange={e => setYF(Number(e.target.value))} className="w-full h-1" /></div>
+                  </div>
+                  {sombraF.ativa && (
+                    <div className="grid grid-cols-3 gap-2 p-2 bg-indigo-50 rounded-lg">
+                      <div>SX<input type="range" min="-30" max="30" value={sombraF.x} onChange={e => setSombraF({ ...sombraF, x: Number(e.target.value) })} className="w-full h-1" /></div>
+                      <div>SY<input type="range" min="-30" max="30" value={sombraF.y} onChange={e => setSombraF({ ...sombraF, y: Number(e.target.value) })} className="w-full h-1" /></div>
+                      <div>BLUR<input type="range" min="0" max="40" value={sombraF.blur} onChange={e => setSombraF({ ...sombraF, blur: Number(e.target.value) })} className="w-full h-1" /></div>
+                    </div>
+                  )}
+                  <textarea value={fraseSocial} onChange={e => setFraseSocial(e.target.value)} className="w-full border rounded p-2 text-xs h-16 outline-none" />
                 </div>
               </div>
+            )}
 
-              {/* SELETOR DE COR */}
-              <div className="flex flex-col gap-1">
-                <label className="text-[10px] font-bold text-gray-400 uppercase italic">Cor Principal</label>
-                <div className="flex items-center gap-3 bg-gray-50 p-2 rounded-lg border">
-                  <input type="color" value={cor} onChange={e => setCor(e.target.value)} className="w-12 h-10 cursor-pointer rounded border-none bg-transparent" />
-                  <span className="text-xs font-mono font-bold text-gray-400 uppercase">{cor}</span>
-                </div>
-              </div>
-            </div>
-
-            <div className="pt-4 flex flex-col gap-3">
-              <button onClick={downloadImage} className="bg-red-900 text-white py-3 rounded-full font-bold uppercase text-xs tracking-widest shadow-lg hover:bg-red-800 transition-all active:scale-95">Baixar PNG</button>
-              <button onClick={salvarVaga} className="bg-zinc-800 text-white py-3 rounded-full font-bold uppercase text-xs tracking-widest shadow-lg hover:bg-zinc-700 transition-all flex items-center justify-center gap-2 active:scale-95">
-                <span>💾</span> Salvar na Nuvem
-              </button>
+            <div className="pt-4 border-t space-y-4">
+              <input type="color" value={cor} onChange={e => setCor(e.target.value)} className="w-full h-8 cursor-pointer rounded-lg bg-transparent border-none shadow-sm" />
+              <button onClick={download} className="w-full bg-red-900 text-white py-4 rounded-full font-black uppercase text-xs shadow-lg active:scale-95 transition-all">BAIXAR PNG</button>
             </div>
           </section>
 
-          {/* PAINEL DIREITO: PREVIEW DO POST */}
-          <section className="flex-1 flex flex-col items-center">
-            <div className="mb-4">
-              <span className="bg-white px-4 py-1 rounded-full text-[10px] font-bold text-gray-400 uppercase tracking-widest shadow-sm">Preview Real</span>
-            </div>
-            <div ref={cardRef} className="bg-white shadow-2xl rounded-sm">
-              <VagaCard
-                titulo={titulo} nomeEmpresa={empresa} subtitulo={subtitulo}
-                requisitos={requisitos.split("\n").filter(r => r !== "")}
-                emailContato={email} logoUrl={logo} imagemUrl={foto} corPrincipal={cor}
-              />
+          <section className="flex-1 flex justify-center sticky top-8">
+            <div ref={cardRef} className="bg-white p-2 shadow-2xl rounded-sm">
+              {modo === 'manual' ? (
+                <VagaCard titulo={titulo} nomeEmpresa={empresa} subtitulo={subtitulo} requisitos={requisitos.split("\n")} emailContato={email} logoUrl={logoManual} imagemUrl={fotoManual} corPrincipal={cor} />
+              ) : (
+                <SocialCard
+                  saudacao={saudacao} frase={fraseSocial} corPrincipal={cor} logoMarca={logoManual}
+                  fonteFrase={fonteFrase} fonteSaudacao={fonteSaudacao}
+                  corFonteSaudacao={corFonteS} corFonteFrase={corFonteF}
+                  mostrarFundoSaudacao={fundoS} tamanhoSaudacao={tamS} xSaudacao={xS} ySaudacao={yS}
+                  tamanhoFrase={tamF} xFrase={xF} yFrase={yF}
+                  imagemFundo={fotoSocial} opacidadeFundo={opacidadeS} blurFundo={blurS}
+                  sombraS={sombraS} sombraF={sombraF}
+                />
+              )}
             </div>
           </section>
         </div>
-
-        {/* SEÇÃO INFERIOR: HISTÓRICO DE VAGAS */}
-        <section className="w-full border-t border-zinc-300 pt-10 pb-20">
-          <div className="flex items-center gap-4 mb-8">
-            <h2 className="text-3xl font-black text-gray-800 italic uppercase leading-none">Histórico de Vagas</h2>
-            <div className="flex-1 h-[2px] bg-zinc-300"></div>
-          </div>
-
-          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6">
-            {vagasSalvas.map((vaga) => (
-              <div
-                key={vaga.id}
-                className="bg-white p-5 rounded-2xl shadow-md border-t-8 flex flex-col justify-between group relative transition-all hover:shadow-xl"
-                style={{ borderColor: vaga.cor }}
-              >
-                {/* BOTÃO EXCLUIR (LIXEIRA) */}
-                <button
-                  onClick={(e) => { e.stopPropagation(); excluirVaga(vaga.id); }}
-                  className="absolute top-2 right-2 p-2 text-gray-300 hover:text-red-600 opacity-0 group-hover:opacity-100 transition-all"
-                  title="Excluir do Histórico"
-                >
-                  <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 6h18M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2M10 11v6M14 11v6" /></svg>
-                </button>
-
-                <div>
-                  <h3 className="font-bold text-gray-800 uppercase text-sm mb-1 line-clamp-2">{vaga.titulo}</h3>
-                  <p className="text-[10px] text-gray-400 font-bold uppercase tracking-widest">{vaga.empresa}</p>
-                </div>
-
-                <button
-                  onClick={() => {
-                    setTitulo(vaga.titulo); setEmpresa(vaga.empresa); setSubtitulo(vaga.subtitulo);
-                    setEmail(vaga.email); setRequisitos(vaga.requisitos.join("\n"));
-                    setCor(vaga.cor); setLogo(vaga.logoUrl); setFoto(vaga.imagemUrl);
-                    window.scrollTo({ top: 0, behavior: 'smooth' });
-                  }}
-                  className="mt-4 w-full py-2 bg-zinc-100 group-hover:bg-red-900 group-hover:text-white text-gray-500 text-[10px] font-black rounded-lg transition-all uppercase tracking-tighter"
-                >
-                  Re-editar vaga
-                </button>
-              </div>
-            ))}
-          </div>
-        </section>
       </div>
     </div>
   );
